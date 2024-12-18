@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'Pokemon Classic';
+  src: url(/fonts/pokemon_classic.ttf);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: 'Pokemon Classic';
+}
+
+.background-day , .background-night {
+  background-size: cover;
+  background-attachment: fixed;
+  background-position:0px;
+  z-index: -20;
+}
+
+.background-day {
+  background-image: url('/backgrounds/day-background.png');
+}
+
+.background-night {
+  background-image: url('/backgrounds/night-background.png');
+}
+
+.bike {
+  position: fixed;
+  right: calc(-15vw);
+  bottom: 1vh;
+  animation: slide 60s cubic-bezier(0.39, 0.58, 0.57, 1) infinite;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -o-user-select: none;
+  user-select: none;
+  /* z-index: -1; */
+}
+
+@keyframes slide {
+  0% {
+    transform: translateX(0px);
+  }
+  100% {
+    transform: translateX(calc(-300vw));
+  }
+}
+
+.selectedPokemon {
+  position: fixed;
+  left: calc(-50% + 10vw);
+  top: calc(-50% + 10vh);
+  animation: vol 15s ease-in-out;
+}
+
+@keyframes vol {
+  0% {
+    transform: translate(0);
+  }
+  10% {
+    transform: translate(calc(150vw), calc(80vh));
+  }
+  50% {
+    transform: translate(calc(130vw), calc(40vh));
+  }
+  70% {
+    transform: translate(calc(110vw), calc(70vh));
+  }
+  75% {
+    transform: translate(calc(110vw), calc(65vh));
+  }
+
+  90% {
+    transform: translate(calc(70vw), calc(85vh));
+  }
+  100% {
+    transform: translate(calc(-500vw), calc(-100vh));
+  }
+}
