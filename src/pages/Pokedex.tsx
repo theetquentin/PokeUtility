@@ -6,9 +6,10 @@ import {
   TYPE_COLORS,
 } from "../constants/pokemonConfig";
 import { TimeProps } from "../interfaces/TimeProps";
+import PokemonModal from "../components/PokemonModal";
 
 // Extension de l'interface Pokemon pour inclure les cris
-interface PokemonWithCries extends Pokemon {
+export interface PokemonWithCries extends Pokemon {
   cries?: {
     latest: string;
   };
@@ -23,6 +24,7 @@ function Pokedex({ timeOfDay }: TimeProps) {
   const [loading, setLoading] = useState(true);
   const [selectedLanguage, setSelectedLanguage] = useState<string>("fr");
   const [selectedGeneration, setSelectedGeneration] = useState<number>(1);
+  const [selectedPokemon, setSelectedPokemon] = useState<PokemonWithCries | null>(null);
   
   // États pour les traductions
   const [typeTranslations, setTypeTranslations] = useState<{
@@ -30,9 +32,6 @@ function Pokedex({ timeOfDay }: TimeProps) {
   }>({}); // Traductions des types pour chaque langue
   const [pokemonNames, setPokemonNames] = useState<{[key: number]: string}>({}); // Noms traduits des Pokémon
   const [allTypeData, setAllTypeData] = useState<{[key: string]: Type}>({}); // Données complètes des types
-
-  // // État pour gérer l'audio en cours de lecture
-  // const [currentlyPlaying, setCurrentlyPlaying] = useState<number | null>(null);
 
   // Effet pour le chargement initial des données
   useEffect(() => {
@@ -148,29 +147,6 @@ function Pokedex({ timeOfDay }: TimeProps) {
   const getTypeName = (typeName: string) =>
     typeTranslations[typeName]?.[selectedLanguage] ?? typeName;
 
-  // Fonction pour jouer le cri d'un Pokémon
-  // const playPokemonCry = (pokemon: PokemonWithCries) => {
-  //   if (pokemon.cries?.latest) {
-  //     // Arrêter le cri en cours s'il y en a un
-  //     if (currentlyPlaying !== null) {
-  //       const oldAudio = document.getElementById(`pokemon-cry-${currentlyPlaying}`) as HTMLAudioElement;
-  //       if (oldAudio) {
-  //         oldAudio.pause();
-  //         oldAudio.currentTime = 0;
-  //       }
-  //     }
-
-  //     // Jouer le nouveau cri
-  //     const audio = document.getElementById(`pokemon-cry-${pokemon.id}`) as HTMLAudioElement;
-  //     if (audio) {
-  //       audio.play();
-  //       setCurrentlyPlaying(pokemon.id);
-  //       // Réinitialiser l'état une fois le cri terminé
-  //       audio.onended = () => setCurrentlyPlaying(null);
-  //     }
-  //   }
-  // };
-
   // Rendu principal
   return (
     <div className="container mx-auto px-20 py-8 relative z-10">
@@ -235,7 +211,8 @@ function Pokedex({ timeOfDay }: TimeProps) {
           {pokemons.map((pokemon) => (
             <div
               key={pokemon.id}
-              className={`rounded-lg p-4 shadow-lg hover:shadow-xl transition-shadow ${
+              onClick={() => setSelectedPokemon(pokemon)}
+              className={`rounded-lg p-4 shadow-lg hover:shadow-xl transition-shadow cursor-pointer ${
                 timeOfDay === "night"
                   ? "bg-gray-800/90 text-gray-200"
                   : "bg-white/70 text-gray-800"
@@ -268,31 +245,23 @@ function Pokedex({ timeOfDay }: TimeProps) {
                   </span>
                 ))}
               </div>
-              {/* {pokemon.cries?.latest && (
-                <>
-                  <audio
-                    id={`pokemon-cry-${pokemon.id}`}
-                    src={pokemon.cries.latest}
-                    preload="none"
-                  />
-                  <button
-                    onClick={() => playPokemonCry(pokemon)}
-                    disabled={currentlyPlaying === pokemon.id}
-                    className={`w-full px-2 py-1 rounded ${
-                      timeOfDay === "night"
-                        ? "bg-gray-700 hover:bg-gray-600"
-                        : "bg-gray-200 hover:bg-gray-300"
-                    } transition-colors ${
-                      currentlyPlaying === pokemon.id ? "opacity-50 cursor-not-allowed" : ""
-                    }`}
-                  >
-                    {currentlyPlaying === pokemon.id ? "♪ ..." : "♪ Cri"}
-                  </button>
-                </>
-              )} */}
             </div>
           ))}
         </div>
+      )}
+
+      {/* Modal */}
+      {selectedPokemon && (
+        <PokemonModal
+          pokemon={selectedPokemon}
+          isOpen={selectedPokemon !== null}
+          onClose={() => setSelectedPokemon(null)}
+          getPokemonName={getPokemonName}
+          getTypeName={getTypeName}
+          timeOfDay={timeOfDay}
+          species={pokemonSpecies.find(s => s.id === selectedPokemon.id)}
+          selectedLanguage={selectedLanguage}
+        />
       )}
     </div>
   );
