@@ -1,130 +1,113 @@
-import { PokemonClient } from "pokenode-ts";
+import { PokemonClient, Pokemon, PokemonSpecies, Type, Name } from "pokenode-ts";
 import { useEffect, useState } from "react";
 import {
   AVAILABLE_LANGUAGES,
   POKEMON_GENERATIONS,
   TYPE_COLORS,
 } from "../constants/pokemonConfig";
-import { Pokemon } from "../interfaces/Pokemon";
-import { PokemonSpecies } from "../interfaces/PokemonSpecies";
-import { PokemonSprites } from "../interfaces/PokemonSprites";
 import { TimeProps } from "../interfaces/TimeProps";
-import { TypePokemon } from "../interfaces/TypePokemon";
+
+// Extension de l'interface Pokemon pour inclure les cris
+interface PokemonWithCries extends Pokemon {
+  cries?: {
+    latest: string;
+  };
+}
 
 function Pokedex({ timeOfDay }: TimeProps) {
-  // États principaux
-  const [pokemons, setPokemons] = useState<Pokemon[]>([]);
+  // États pour les données des Pokémon
+  const [pokemons, setPokemons] = useState<PokemonWithCries[]>([]); // Données de base des Pokémon (sprites, types, cris, etc.)
+  const [pokemonSpecies, setPokemonSpecies] = useState<PokemonSpecies[]>([]); // Données des espèces (noms traduits, descriptions, etc.)
+  
+  // États pour l'interface utilisateur
   const [loading, setLoading] = useState(true);
   const [selectedLanguage, setSelectedLanguage] = useState<string>("fr");
+  const [selectedGeneration, setSelectedGeneration] = useState<number>(1);
+  
+  // États pour les traductions
   const [typeTranslations, setTypeTranslations] = useState<{
     [key: string]: { [key: string]: string };
-  }>({});
-  const [selectedGeneration, setSelectedGeneration] = useState<number>(1);
-  const [pokemonCache, setPokemonCache] = useState<{
-    [key: number]: Pokemon[];
-  }>({});
+  }>({}); // Traductions des types pour chaque langue
+  const [pokemonNames, setPokemonNames] = useState<{[key: number]: string}>({}); // Noms traduits des Pokémon
+  const [allTypeData, setAllTypeData] = useState<{[key: string]: Type}>({}); // Données complètes des types
 
-  useEffect(() => {
-    const savedCache = localStorage.getItem("pokemonCache");
-    if (savedCache) {
-      setPokemonCache(JSON.parse(savedCache));
-    }
-  }, []);
+  // // État pour gérer l'audio en cours de lecture
+  // const [currentlyPlaying, setCurrentlyPlaying] = useState<number | null>(null);
 
-  useEffect(() => {
-    localStorage.setItem("pokemonCache", JSON.stringify(pokemonCache));
-  }, [pokemonCache]);
-
+  // Effet pour le chargement initial des données
   useEffect(() => {
     const api = new PokemonClient();
 
-    // Récupère les traductions pour tous les types de Pokémon
-    const fetchTypeTranslations = async () => {
-      const translations: { [key: string]: { [key: string]: string } } = {};
-
-      await Promise.all(
-        Object.keys(TYPE_COLORS).map(async (type) => {
-          try {
-            const typeData = await api.getTypeByName(type);
-            translations[type] = Object.fromEntries(
-              typeData.names.map((name) => [name.language.name, name.name])
-            );
-          } catch (error) {
-            console.error(`Erreur traduction type ${type}:`, error);
-          }
-        })
-      );
-
-      return translations;
+    /**
+     * Charge les données par lots pour éviter de surcharger l'API
+     * @param ids Liste des IDs de Pokémon à charger
+     * @returns Liste des résultats (Pokémon + Espèces)
+     */
+    const fetchInBatches = async (ids: number[]) => {
+      const batchSize = 200; // Nombre de requêtes simultanées
+      const results = [];
+      
+      // Traitement par lots
+      for (let i = 0; i < ids.length; i += batchSize) {
+        const batch = ids.slice(i, i + batchSize);
+        // Chargement parallèle des Pokémon et de leurs espèces
+        const batchResults = await Promise.all(
+          batch.map(async (pokemonId) => {
+            try {
+              // Récupération directe depuis l'API pour avoir les cris
+              const [pokemonResponse, species] = await Promise.all([
+                fetch(`https://pokeapi.co/api/v2/pokemon/${pokemonId}`).then(res => res.json()),
+                api.getPokemonSpeciesById(pokemonId)
+              ]);
+              return { pokemon: pokemonResponse as PokemonWithCries, species };
+            } catch (error) {
+              console.error(`Erreur Pokémon ${pokemonId}:`, error);
+              return null;
+            }
+          })
+        );
+        results.push(...batchResults);
+        
+        // Pause entre les lots si nécessaire
+        if (i + batchSize < ids.length) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+      }
+      return results;
     };
 
-    // Fonction principale de chargement des données
-    const fetchPokemonData = async () => {
+    /**
+     * Charge toutes les données nécessaires (Pokémon, espèces et types)
+     */
+    const fetchAllData = async () => {
       try {
         setLoading(true);
-
-        // Vérifier si les données sont déjà en cache
-        if (pokemonCache[selectedGeneration]) {
-          setPokemons(pokemonCache[selectedGeneration]);
-          setLoading(false);
-          return;
-        }
-
         const generation = POKEMON_GENERATIONS[selectedGeneration];
-        const [pokemonData, translations] = await Promise.all([
-          Promise.all(
-            Array.from(
-              { length: generation.end - generation.start + 1 },
-              async (_, i) => {
-                try {
-                  const pokemonId = generation.start + i;
-                  const [pokemon, species] = await Promise.all([
-                    api.getPokemonById(pokemonId),
-                    api.getPokemonSpeciesById(pokemonId),
-                  ]);
-
-                  return {
-                    name: pokemon.name,
-                    id: pokemon.id,
-                    sprites: {
-                      front_default: pokemon.sprites.front_default,
-                      front_shiny: pokemon.sprites.front_shiny,
-                    } as PokemonSprites,
-                    species: {
-                      name: species.name,
-                      names: species.names,
-                    } as PokemonSpecies,
-                    types: pokemon.types.map((type) => ({
-                      type: {
-                        name: type.type.name,
-                      },
-                    })) as TypePokemon[],
-                  };
-                } catch (error) {
-                  console.error(
-                    `Erreur Pokémon ${generation.start + i}:`,
-                    error
-                  );
-                  return null;
-                }
-              }
-            )
-          ),
-          fetchTypeTranslations(),
-        ]);
-
-        const filteredPokemonData = pokemonData.filter(
-          (p): p is Pokemon => p !== null
+        
+        // Création de la liste des IDs pour la génération sélectionnée
+        const pokemonIds = Array.from(
+          { length: generation.end - generation.start + 1 },
+          (_, i) => generation.start + i
         );
 
-        // Mettre à jour le cache avec les nouvelles données
-        setPokemonCache((prevCache) => ({
-          ...prevCache,
-          [selectedGeneration]: filteredPokemonData,
-        }));
+        // Chargement parallèle des Pokémon et des types
+        const [pokemonResults, typeData] = await Promise.all([
+          fetchInBatches(pokemonIds),
+          Promise.all(Object.keys(TYPE_COLORS).map(type => api.getTypeByName(type)))
+        ]);
 
-        setPokemons(filteredPokemonData);
-        setTypeTranslations(translations);
+        const filteredResults = pokemonResults.filter((r): r is { pokemon: PokemonWithCries, species: PokemonSpecies } => r !== null);
+        
+        // Organisation des données des types pour faciliter l'accès
+        const typeDataMap = typeData.reduce((acc, type) => {
+          acc[type.name] = type;
+          return acc;
+        }, {} as {[key: string]: Type});
+
+        // Mise à jour de tous les états
+        setAllTypeData(typeDataMap);
+        setPokemons(filteredResults.map(r => r.pokemon));
+        setPokemonSpecies(filteredResults.map(r => r.species));
       } catch (error) {
         console.error("Erreur de chargement:", error);
       } finally {
@@ -132,19 +115,61 @@ function Pokedex({ timeOfDay }: TimeProps) {
       }
     };
 
-    fetchPokemonData();
-  }, [selectedGeneration, pokemonCache]);
+    fetchAllData();
+  }, [selectedGeneration]); // Recharge quand la génération change
 
-  // Helpers pour la traduction
-  const getPokemonName = (pokemon: Pokemon) =>
-    pokemon.species?.names?.find(
-      (name) => name.language.name === selectedLanguage
-    )?.name ??
-    pokemon.name ??
-    "";
+  // Effet pour la gestion des traductions
+  useEffect(() => {
+    if (pokemonSpecies.length > 0 && Object.keys(allTypeData).length > 0) {
+      // Traduction des types pour la langue sélectionnée
+      const translations: { [key: string]: { [key: string]: string } } = {};
+      Object.values(allTypeData).forEach(type => {
+        translations[type.name] = Object.fromEntries(
+          type.names.map((name: Name) => [name.language.name, name.name])
+        );
+      });
+      setTypeTranslations(translations);
+
+      // Traduction des noms de Pokémon pour la langue sélectionnée
+      const newNames: {[key: number]: string} = {};
+      pokemonSpecies.forEach(s => {
+        newNames[s.id] = s.names.find(
+          name => name.language.name === selectedLanguage
+        )?.name || s.name;
+      });
+      setPokemonNames(newNames);
+    }
+  }, [selectedLanguage, pokemonSpecies, allTypeData]); // Met à jour quand la langue change
+
+  // Helpers pour obtenir les noms traduits
+  const getPokemonName = (pokemon: PokemonWithCries) =>
+    pokemonNames[pokemon.id] ?? pokemon.name ?? "";
 
   const getTypeName = (typeName: string) =>
     typeTranslations[typeName]?.[selectedLanguage] ?? typeName;
+
+  // Fonction pour jouer le cri d'un Pokémon
+  // const playPokemonCry = (pokemon: PokemonWithCries) => {
+  //   if (pokemon.cries?.latest) {
+  //     // Arrêter le cri en cours s'il y en a un
+  //     if (currentlyPlaying !== null) {
+  //       const oldAudio = document.getElementById(`pokemon-cry-${currentlyPlaying}`) as HTMLAudioElement;
+  //       if (oldAudio) {
+  //         oldAudio.pause();
+  //         oldAudio.currentTime = 0;
+  //       }
+  //     }
+
+  //     // Jouer le nouveau cri
+  //     const audio = document.getElementById(`pokemon-cry-${pokemon.id}`) as HTMLAudioElement;
+  //     if (audio) {
+  //       audio.play();
+  //       setCurrentlyPlaying(pokemon.id);
+  //       // Réinitialiser l'état une fois le cri terminé
+  //       audio.onended = () => setCurrentlyPlaying(null);
+  //     }
+  //   }
+  // };
 
   // Rendu principal
   return (
@@ -243,6 +268,28 @@ function Pokedex({ timeOfDay }: TimeProps) {
                   </span>
                 ))}
               </div>
+              {/* {pokemon.cries?.latest && (
+                <>
+                  <audio
+                    id={`pokemon-cry-${pokemon.id}`}
+                    src={pokemon.cries.latest}
+                    preload="none"
+                  />
+                  <button
+                    onClick={() => playPokemonCry(pokemon)}
+                    disabled={currentlyPlaying === pokemon.id}
+                    className={`w-full px-2 py-1 rounded ${
+                      timeOfDay === "night"
+                        ? "bg-gray-700 hover:bg-gray-600"
+                        : "bg-gray-200 hover:bg-gray-300"
+                    } transition-colors ${
+                      currentlyPlaying === pokemon.id ? "opacity-50 cursor-not-allowed" : ""
+                    }`}
+                  >
+                    {currentlyPlaying === pokemon.id ? "♪ ..." : "♪ Cri"}
+                  </button>
+                </>
+              )} */}
             </div>
           ))}
         </div>

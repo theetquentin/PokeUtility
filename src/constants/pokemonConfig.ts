@@ -24,13 +24,13 @@ export const TYPE_COLORS: { [key: string]: string } = {
 export const AVAILABLE_LANGUAGES: Language[] = [
   { code: "fr", label: "Français" },
   { code: "en", label: "English" },
-  { code: "de", label: "German" },
+  { code: "de", label: "Deutsch" },
   { code: "ja", label: "Japanese" },
   { code: "ko", label: "Korean" },
 ];
 
 export const POKEMON_GENERATIONS = [
-  { id: 0, label: "Tous", start: 1, end: 1008 },
+  { id: 0, label: "Tous", start: 1, end: 1025 },
   { id: 1, label: "Génération 1", start: 1, end: 151 },
   { id: 2, label: "Génération 2", start: 152, end: 251 },
   { id: 3, label: "Génération 3", start: 252, end: 386 },
